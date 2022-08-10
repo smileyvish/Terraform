@@ -12,5 +12,5 @@ jobs:
         run: |
           node -v
           npm -v
-          yum install terraform -y
+          terraform init
           terraform -v
