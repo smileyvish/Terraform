@@ -11,5 +11,5 @@ jobs:
       - name: multilinecommand
         run: |
           node -v
-          npn -v
+          npm -v
           terraform -v
