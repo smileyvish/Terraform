@@ -1,39 +1,80 @@
-name: shell command
+name: 'Deploy DEV environment'
 
-on: [push]
+on:
+  push:
+    branches:
+    - feat/**
+
+  workflow_dispatch:
 
 jobs:
-  run-shell-command:
+  deploy_feat:
+    name: 'Deploy DEV environment'
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - name: echo vishalagrawal
-        run: echo "vishalagrawal"
-      - name: multilinecommand
-        run: |
-          node -v
-          npm -v
-      - uses: hashicorp/setup-terraform@v1
-            
-      - name: Terraform Version
-        uses: terraform -v
+    - name: Public IP
+      id: ip
+      uses: haythem/public-ip@v1.2
+    - uses: actions/checkout@v2
 
-      - name: Install dependencies
-        uses: npm -i
+    - uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 1.3.7
 
-      - name: Install Serverless Framework
-        run: npm i -g serverless@3.13.0
-
-      - name: Serverless Framework version
-        run: serverless -v
-
-      - name: Node version
-        uses: npm -v
-
-      - name: Unit Tests
-        run: npm run test:unit
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+        mask-aws-account-id: false
       
-      - name: Terraform Format
-        run: terraform fmt -recursive
-      #   working-directory: ./terraform
+    - name: Get Caller Identity
+      run: aws sts get-caller-identity
 
-      # - name: 
+    - name: Node version
+      run: node -v
+
+    - name: Terraform version
+      run: terraform -v
+
+    - name: Terraform Format
+      run: terraform fmt -recursive
+      working-directory: ./terraform
+    
+    - name: Terraform Init
+      run: |
+        export ENVIRONMENT_NAME=${GITHUB_REF##*/}
+
+        terraform init \
+          -backend-config="region=us-east-1" \
+          -backend-config="key=ecim/${ENVIRONMENT_NAME}/terraform.tfstate" \
+          -backend-config="bucket=terraform-state" \
+      working-directory: ./terraform
+
+    - name: Terraform Plan
+      run: |
+        export ENVIRONMENT_NAME=${GITHUB_REF##*/}
+
+        terraform plan \
+          -var='aws_profile_name=' \
+          -var="environment=${ENVIRONMENT_NAME}" \
+      working-directory: ./terraform
+
+    - name: Terraform Validate
+      run: terraform validate
+      working-directory: ./terraform
+
+    - name: Terraform Apply
+      run: |
+        export ENVIRONMENT_NAME=${GITHUB_REF##*/}
+
+        terraform apply \
+          -var='aws_profile_name=' \
+          -var="environment=${ENVIRONMENT_NAME}" \
+          -auto-approve
